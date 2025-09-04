@@ -59,6 +59,9 @@
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) inset;
             background-color: #cbd5e0;
         }
+        .btn.glowing {
+            animation: glowing-button 1.5s infinite alternate;
+        }
         .btn-up { grid-area: up; }
         .btn-down { grid-area: down; }
         .btn-left { grid-area: left; }
@@ -94,6 +97,14 @@
             font-size: 0.875rem;
             color: #4a5568;
         }
+        @keyframes glowing-button {
+            from {
+                box-shadow: 0 0 5px #e2e8f0, 0 0 10px #e2e8f0;
+            }
+            to {
+                box-shadow: 0 0 20px #e2e8f0, 0 0 30px #e2e8f0;
+            }
+        }
     </style>
 </head>
 <body class="bg-gray-100 flex items-center justify-center min-h-screen">
@@ -115,14 +126,9 @@
     </div>
 
     <script>
-        // Use o nome do seu módulo Bluetooth. Ex: 'HMSoft'.
-        const deviceName = 'Sua-Placa'; 
-
-        // Coloque aqui o UUID do serviço que você encontrou no nRF Connect.
-        const serviceUuid = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
-
-        // Coloque aqui o UUID da característica de 'Write' que você encontrou.
-        const characteristicUuid = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+        const deviceName = 'BT05'; 
+        const serviceUuid = '0000ffe0-0000-1000-8000-00805f9b34fb';
+        const characteristicUuid = '0000ffe1-0000-1000-8000-00805f9b34fb';
 
         let bluetoothDevice;
         let controlCharacteristic;
@@ -148,13 +154,10 @@
             try {
                 log('Procurando dispositivos...');
                 bluetoothDevice = await navigator.bluetooth.requestDevice({
-                    filters: [
-                        { name: deviceName },
-                        { services: [serviceUuid] }
-                    ],
+                    acceptAllDevices: true,
                     optionalServices: [serviceUuid]
                 });
-
+                
                 log('Conectando ao GATT...');
                 const server = await bluetoothDevice.gatt.connect();
 
@@ -168,7 +171,6 @@
                 connectButton.textContent = 'Conectado';
                 connectButton.disabled = true;
 
-                // Listen for disconnection
                 bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
 
             } catch (error) {
@@ -196,18 +198,31 @@
         }
 
         function setupButtonListeners() {
-            // Mouse/Touch events for continuous commands
             Object.keys(controlButtons).forEach(key => {
                 const btn = controlButtons[key];
                 const command = getCommandChar(key);
                 
-                btn.addEventListener('mousedown', () => sendCommand(command));
-                btn.addEventListener('mouseup', () => sendCommand('S'));
+                btn.addEventListener('mousedown', () => {
+                    sendCommand(command);
+                    if (command !== 'S') {
+                        btn.classList.add('glowing');
+                    }
+                });
+                btn.addEventListener('mouseup', () => {
+                    sendCommand('S');
+                    btn.classList.remove('glowing');
+                });
                 btn.addEventListener('touchstart', (e) => {
                     e.preventDefault();
                     sendCommand(command);
+                    if (command !== 'S') {
+                        btn.classList.add('glowing');
+                    }
                 });
-                btn.addEventListener('touchend', () => sendCommand('S'));
+                btn.addEventListener('touchend', () => {
+                    sendCommand('S');
+                    btn.classList.remove('glowing');
+                });
             });
         }
 
@@ -225,4 +240,9 @@
         setupButtonListeners();
     </script>
 </body>
+</html>
+        setupButtonListeners();
+    </script>
+</body>
+
 </html>
