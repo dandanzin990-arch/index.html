@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="pt">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Controle BLE - CC2540 (HM-10)</title>
+  <style>
+    body{font-family:system-ui,Segoe UI,Roboto,Arial;padding:18px;max-width:600px;margin:auto;}
+    h1{font-size:20px;margin-bottom:6px;}
+    .row{display:flex;gap:8px;margin:8px 0;}
+    button{flex:1;padding:12px;font-size:16px;border-radius:8px;border:1px solid #ccc;background:#f5f5f5;cursor:pointer;}
+    #status{margin-top:10px;color:#333;}
+    input[type="text"]{width:100%;padding:8px;border-radius:6px;border:1px solid #ccc;}
+    small{color:#666}
+  </style>
+</head>
+<body>
+  <h1>Controle BLE para CC2540 / HM-10</h1>
+  <p>Conecte ao módulo BLE e envie comandos simples para controlar os servos.</p>
+
+  <label>Service UUID (padrão HM-10 / CC2540):</label>
+  <input id="serviceUuid" type="text" value="0000ffe0-0000-1000-8000-00805f9b34fb" />
+
+  <label>Characteristic UUID (padrão HM-10 / CC2540):</label>
+  <input id="charUuid" type="text" value="0000ffe1-0000-1000-8000-00805f9b34fb" />
+
+  <div class="row" style="margin-top:12px;">
+    <button id="btnConnect">Conectar</button>
+    <button id="btnDisconnect" disabled>Desconectar</button>
+  </div>
+
+  <div class="row">
+    <button data-cmd="F">Frente (F)</button>
+    <button data-cmd="B">Trás (B)</button>
+  </div>
+  <div class="row">
+    <button data-cmd="L">Esquerda (L)</button>
+    <button data-cmd="R">Direita (R)</button>
+  </div>
+  <div class="row">
+    <button data-cmd="S">Parar (S)</button>
+    <button id="btnCustom">Enviar texto</button>
+  </div>
+
+  <input id="customText" type="text" placeholder="Texto personalizado (será enviado como ASCII)" />
+  <p id="status"><small>Status: desconectado</small></p>
+
+<script>
+let device = null;
+let server = null;
+let txChar = null; // característica para escrever
+
+const btnConnect = document.getElementById('btnConnect');
+const btnDisconnect = document.getElementById('btnDisconnect');
+const status = document.getElementById('status');
+const serviceInput = document.getElementById('serviceUuid');
+const charInput = document.getElementById('charUuid');
+
+function log(s){
+  status.innerHTML = '<small>Status: ' + s + '</small>';
+  console.log(s);
+}
+
+async function connectBLE(){
+  try{
+    const serviceUuid = serviceInput.value.trim();
+    // solicitar dispositivo (filtra por serviços se informado)
+    const options = {
+      acceptAllDevices: false,
+      optionalServices: [serviceUuid]
+    };
+    // Navegadores permitem também usar filters: [{namePrefix:'HM'}, ...]
+    const deviceRequest = await navigator.bluetooth.requestDevice({
+      // Tentar filtrar por nome comum (opcional); aqui deixamos aberto e usamos optionalServices
+      //filters: [{services: [serviceUuid]}],
+      optionalServices: [serviceUuid],
+      acceptAllDevices: true
+    });
+
+    device = deviceRequest;
+    device.addEventListener('gattserverdisconnected', onDisconnected);
+    log('Conectando a ' + (device.name || device.id) + ' ...');
+
+    server = await device.gatt.connect();
+    const service = await server.getPrimaryService(serviceUuid);
+    const char = await service.getCharacteristic(charInput.value.trim());
+
+    txChar = char;
+    btnDisconnect.disabled = false;
+    btnConnect.disabled = true;
+    log('Conectado a ' + (device.name || device.id));
+  } catch (err) {
+    console.error(err);
+    log('Erro: ' + (err.message || err));
+  }
+}
+
+function onDisconnected(){
+  log('Desconectado');
+  btnConnect.disabled = false;
+  btnDisconnect.disabled = true;
+  txChar = null;
+  device = null;
+}
+
+async function disconnectBLE(){
+  if (device && device.gatt.connected) {
+    device.gatt.disconnect();
+    onDisconnected();
+  }
+}
+
+async function sendCommand(cmd){
+  if (!txChar) return log('Não conectado ou característica inválida.');
+  try{
+    // cmd: string -> enviar em ASCII
+    const encoder = new TextEncoder();
+    const data = encoder.encode(cmd);
+    await txChar.writeValue(data);
+    log('Enviado: ' + cmd);
+  } catch(err) {
+    console.error(err);
+    log('Erro ao enviar: ' + (err.message || err));
+  }
+}
+
+// botões
+btnConnect.addEventListener('click', connectBLE);
+btnDisconnect.addEventListener('click', disconnectBLE);
+
+document.querySelectorAll('button[data-cmd]').forEach(b => {
+  b.addEventListener('click', () => {
+    const c = b.getAttribute('data-cmd');
+    sendCommand(c);
+  });
+});
+
+document.getElementById('btnCustom').addEventListener('click', () => {
+  const t = document.getElementById('customText').value || '';
+  if (t.length === 0) return log('Digite algo no campo de texto.');
+  sendCommand(t);
+});
+
+// Detectar se Web Bluetooth está disponível
+if (!navigator.bluetooth) {
+  log('Web Bluetooth API não disponível neste navegador. Tente Chrome/Edge em Android/desktop.');
+}
+</script>
+</body>
+</html>
